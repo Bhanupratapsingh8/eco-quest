@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { login } = useAuth(); // ✅ use context
+  const { login } = useAuth();
 
   const [form, setForm] = useState({
     email: "",
@@ -28,15 +28,14 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // ✅ this handles token + user internally
+      // login using AuthContext
       await login(form.email, form.password);
 
-      // ✅ wait a bit for user state to update
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 300);
+      // redirect after login
+      navigate("/dashboard");
 
     } catch (err) {
+      console.error(err);
       setError(err.response?.data?.message || "Login failed");
     } finally {
       setLoading(false);
@@ -45,7 +44,7 @@ export default function LoginPage() {
 
   return (
     <div style={{ padding: "40px", color: "white" }}>
-      <h2>Login Page ✅</h2>
+      <h2>Login Page</h2>
 
       <form onSubmit={handleSubmit}>
         <input
@@ -54,6 +53,7 @@ export default function LoginPage() {
           placeholder="Enter email"
           value={form.email}
           onChange={handleChange}
+          required
         />
         <br /><br />
 
@@ -63,6 +63,7 @@ export default function LoginPage() {
           placeholder="Enter password"
           value={form.password}
           onChange={handleChange}
+          required
         />
         <br /><br />
 
