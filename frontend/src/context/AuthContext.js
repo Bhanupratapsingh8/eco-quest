@@ -1,66 +1,101 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import api from '../services/api';
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
-// Hook to use auth
-export const useAuth = () => useContext(AuthContext);
-
-// Backend URL
-const BASE_URL = "https://eco-quest-backend-mh98.onrender.com";
-
-export const AuthProvider = ({ children }) => {
+export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState(() => localStorage.getItem('ecoquest_token'));
 
-  // =========================
-  // LOGIN FUNCTION (FIXED)
-  // =========================
-  const login = async (email, password) => {
+  useEffect(() => {
+    if (token) {
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      fetchMe();
+    } else {
+      setLoading(false);
+    }
+  }, [token]);
+
+  const fetchMe = async () => {
     try {
-      const response = await fetch(`${BASE_URL}/api/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      // ❗ If backend returns error
-      if (!response.ok) {
-        throw new Error(data.message || "Login failed");
-      }
-
-      // Save user in state
+      const { data } = await api.get('/auth/me');
       setUser(data.user);
-
-      // Save token (if exists)
-      if (data.token) {
-        localStorage.setItem("token", data.token);
-      }
-
-      return data;
-
-    } catch (error) {
-      console.error("Login Error:", error);
-      throw error; // important for Login.js catch block
+    } catch {
+      logout();
+    } finally {
+      setLoading(false);
     }
   };
 
-  // =========================
-  // LOGOUT FUNCTION
-  // =========================
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem("token");
+  const login = async (email, password) => {
+    const { data } = await api.post('/auth/login', { email, password });
+    localStorage.setItem('ecoquest_token', data.token);
+    api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
+    setToken(data.token);
+    setUser(data.user);
+    return data;
   };
 
-  // =========================
-  // PROVIDER
-  // =========================
+  // Student registration
+  const register = async (username, email, password, avatar, studentType, institution = '') => {
+    const { data } = await api.post('/auth/register', {
+      username, email, password, avatar, studentType, institution,
+    });
+    localStorage.setItem('ecoquest_token', data.token);
+    api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
+    setToken(data.token);
+    setUser(data.user);
+    return data;
+  };
+
+  // Teacher registration (NEW)
+  const registerTeacher = async (name, email, password, institution = '') => {
+    const { data } = await api.post('/auth/register-teacher', {
+      name, email, password, institution,
+    });
+    localStorage.setItem('ecoquest_token', data.token);
+    api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
+    setToken(data.token);
+    setUser(data.user);
+    return data;
+  };
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('ecoquest_token');
+    delete api.defaults.headers.common['Authorization'];
+    setToken(null);
+    setUser(null);
+  }, []);
+
+  const updateUser = useCallback((updates) => {
+    setUser(prev => prev ? { ...prev, ...updates } : prev);
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    try {
+      const { data } = await api.get('/auth/me');
+      setUser(data.user);
+    } catch (err) {
+      console.error('Failed to refresh user:', err);
+    }
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{
+      user, token, loading,
+      login, register, registerTeacher, logout,
+      updateUser, refreshUser,
+      isAdmin: user?.role === 'admin',
+      isAuthenticated: !!user,
+    }}>
       {children}
     </AuthContext.Provider>
   );
+}
+
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
 };
