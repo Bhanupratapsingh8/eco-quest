@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { postData } from "../services/api";
+import { useAuth } from "../context/AuthContext";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { login } = useAuth(); // ✅ use context
 
   const [form, setForm] = useState({
     email: "",
@@ -27,31 +28,16 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await postData("/api/auth/login", form);
+      // ✅ this handles token + user internally
+      await login(form.email, form.password);
 
-      // ❌ login failed
-      if (!res || !res.success) {
-        setError(res?.message || "Login failed");
-        setLoading(false);
-        return;
-      }
-
-      // ✅ save token (VERY IMPORTANT)
-      if (res.token) {
-        localStorage.setItem("token", res.token);
-      }
-
-      // ✅ save user (optional but good)
-      if (res.user) {
-        localStorage.setItem("user", JSON.stringify(res.user));
-      }
-
-      // ✅ redirect (MAIN FIX)
-      navigate("/dashboard");
+      // ✅ wait a bit for user state to update
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 300);
 
     } catch (err) {
-      setError("Something went wrong");
-      console.error(err);
+      setError(err.response?.data?.message || "Login failed");
     } finally {
       setLoading(false);
     }
